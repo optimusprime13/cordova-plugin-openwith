@@ -212,14 +212,14 @@ static NSDictionary* launchOptions = nil;
     }
 
     [self.userDefaults synchronize];
-    NSObject *object = [self.userDefaults objectForKey:@"image"];
+    NSObject *object = [self.userDefaults objectForKey:SHAREEXT_USERDEFAULTS_DATA_KEY];
     if (object == nil) {
         [self debug:@"[checkForFileToShare] Nothing to share"];
         return;
     }
 
     // Clean-up the object, assume it's been handled from now, prevent double processing
-    [self.userDefaults removeObjectForKey:@"image"];
+    [self.userDefaults removeObjectForKey:SHAREEXT_USERDEFAULTS_DATA_KEY];
 
     // Extract sharing data, make sure that it is valid
     if (![object isKindOfClass:[NSDictionary class]]) {
@@ -227,15 +227,14 @@ static NSDictionary* launchOptions = nil;
         return;
     }
     NSDictionary *dict = (NSDictionary*)object;
-    NSData *data = dict[@"data"];
-    NSString *text = dict[@"text"];
+//    NSData *data = dict[@"data"];
     NSString *name = dict[@"name"];
     self.backURL = dict[@"backURL"];
     NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
-    if (![data isKindOfClass:NSData.class] || ![text isKindOfClass:NSString.class]) {
-        [self debug:@"[checkForFileToShare] Data content is invalid"];
-        return;
-    }
+//    if (![data isKindOfClass:NSData.class]) {
+//        [self debug:@"[checkForFileToShare] Data content is invalid"];
+//        return;
+//    }
     NSArray *utis = dict[@"utis"];
     if (utis == nil) {
         utis = @[];
@@ -245,9 +244,8 @@ static NSDictionary* launchOptions = nil;
     // TODO: implement cordova.openwith.exit(intent), will check if backURL is set
 
     // Send to javascript
-    [self debug:[NSString stringWithFormat:
-        @"[checkForFileToShare] Sharing text \"%@\" and a %d bytes image",
-        text, data.length]];
+//    [self debug:[NSString stringWithFormat:
+//        @"[checkForFileToShare] Sharing a %lu bytes image", (unsigned long)data.length]];
 
     NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@",
         name, type];
@@ -255,8 +253,7 @@ static NSDictionary* launchOptions = nil;
         @"action": @"SEND",
         @"exit": @YES,
         @"items": @[@{
-            @"text" : text,
-            @"base64": [data convertToBase64],
+//            @"base64": [data convertToBase64],
             @"type": type,
             @"utis": utis,
             @"uri": uri,

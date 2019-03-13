@@ -31,7 +31,7 @@
 #import <Social/Social.h>
 #import "ShareViewController.h"
 
-@interface ShareViewController : SLComposeServiceViewController {
+@interface ShareViewController : UIViewController {
     int _verbosityLevel;
     NSUserDefaults *_userDefaults;
     NSString *_backURL;
@@ -39,6 +39,8 @@
 @property (nonatomic) int verbosityLevel;
 @property (nonatomic,retain) NSUserDefaults *userDefaults;
 @property (nonatomic,retain) NSString *backURL;
+@property (nonatomic) int bitsToLoad;
+
 @end
 
 /*
@@ -65,6 +67,13 @@
 - (void) info:(NSString*)message { [self log:VERBOSITY_INFO message:message]; }
 - (void) warn:(NSString*)message { [self log:VERBOSITY_WARN message:message]; }
 - (void) error:(NSString*)message { [self log:VERBOSITY_ERROR message:message]; }
+
+-(void) viewDidLoad {
+    [super viewDidLoad];
+    printf("did load");
+    [self debug:@"[viewDidLoad]"];
+    [self submit];
+}
 
 - (void) setup {
     self.userDefaults = [[NSUserDefaults alloc] initWithSuiteName:SHAREEXT_GROUP_IDENTIFIER];
@@ -104,78 +113,151 @@
     }
 }
 
-- (void) didSelectPost {
+- (void) dataFetched {
+    self.bitsToLoad--;
+    if (self.bitsToLoad == 0) {
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+    }
+}
 
-    [self setup];
-    [self debug:@"[didSelectPost]"];
+-(void) handleData:(NSData *)data :(NSItemProvider*)itemProvider {
+    NSString *suggestedName = @"";
+    if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
+        suggestedName = [itemProvider valueForKey:@"suggestedName"];
+    }
+    
+    NSString *uti = @"";
+    NSArray<NSString *> *utis = [NSArray new];
+    if ([itemProvider.registeredTypeIdentifiers count] > 0) {
+        uti = itemProvider.registeredTypeIdentifiers[0];
+        utis = itemProvider.registeredTypeIdentifiers;
+    }
+    else {
+        uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
+    }
+    NSDictionary *dict = @{
+                           @"backURL": self.backURL,
+                           @"data" : data,
+                           @"uti": uti,
+                           @"utis": utis,
+                           @"name": suggestedName
+                           };
+    [self.userDefaults setObject:dict forKey:SHAREEXT_USERDEFAULTS_DATA_KEY];
+    [self.userDefaults synchronize];
+    
+    // Emit a URL that opens the cordova app
+    NSString *url = [NSString stringWithFormat:@"%@://%@", @"cxm", @"share"];
+    
+    [self openURL:[NSURL URLWithString:url]];
+    
+    [self dataFetched];
+}
 
+- (void) handleShare {
+    for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
+        self.bitsToLoad ++;
+        
+        NSItemProviderCompletionHandler imageHandler = ^(UIImage *item, NSError *error) {
+            NSData *data = [[NSData alloc] init];
+            if([(NSObject*)item isKindOfClass:[UIImage class]]) {
+                data = UIImagePNGRepresentation((UIImage*)item);
+            }
+            
+            [self handleData:data :itemProvider];
+        };
+        
+        NSItemProviderCompletionHandler urlHandler = ^(NSURL *item, NSError *error) {
+            NSData *data = [[NSData alloc] init];
+            if([(NSObject*)item isKindOfClass:[NSURL class]]) {
+                data = [NSData dataWithContentsOfURL:(NSURL*)item];
+            }
+            
+            [self handleData:data :itemProvider];
+        };
+        
+        if([itemProvider hasItemConformingToTypeIdentifier:@"public.image"]) {
+            [itemProvider loadItemForTypeIdentifier:@"public.image" options:nil completionHandler:imageHandler];
+        } else if([itemProvider hasItemConformingToTypeIdentifier:@"public.url"]) {
+            [itemProvider loadItemForTypeIdentifier:@"public.url" options:nil completionHandler:urlHandler];
+        } else if([itemProvider hasItemConformingToTypeIdentifier:@"public.movie"]) {
+            [itemProvider loadItemForTypeIdentifier:@"public.movie" options:nil completionHandler:urlHandler];
+        } else {
+            [self debug:[NSString stringWithFormat:@"Unknown attachment type = %@", itemProvider]];
+            [self dataFetched];
+        }
+    }
+}
+
+- (void) handleShareForOlderOS {
     // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
     for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
+        self.bitsToLoad++;
         
         if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
             [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
             
-            [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
+            [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil
+                                  completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
                 
                 NSData *data = [[NSData alloc] init];
                 if([(NSObject*)item isKindOfClass:[NSURL class]]) {
                     data = [NSData dataWithContentsOfURL:(NSURL*)item];
                 }
+                                      
                 if([(NSObject*)item isKindOfClass:[UIImage class]]) {
                     data = UIImagePNGRepresentation((UIImage*)item);
                 }
-
+                                      
                 NSString *suggestedName = @"";
                 if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
                     suggestedName = [itemProvider valueForKey:@"suggestedName"];
                 }
-
+                
                 NSString *uti = @"";
                 NSArray<NSString *> *utis = [NSArray new];
                 if ([itemProvider.registeredTypeIdentifiers count] > 0) {
                     uti = itemProvider.registeredTypeIdentifiers[0];
                     utis = itemProvider.registeredTypeIdentifiers;
-                }
-                else {
+                } else {
                     uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
                 }
+                                      
                 NSDictionary *dict = @{
-                    @"text": self.contentText,
-                    @"backURL": self.backURL,
-                    @"data" : data,
-                    @"uti": uti,
-                    @"utis": utis,
-                    @"name": suggestedName
-                };
-                [self.userDefaults setObject:dict forKey:@"image"];
+                                       @"backURL": self.backURL,
+                                       @"fileUrl" : [(NSURL*)item absoluteString],
+//                                       @"data" : data,
+                                       @"uti": uti,
+                                       @"utis": utis,
+                                       @"name": suggestedName
+                                       };
+                [self.userDefaults setObject:dict forKey:SHAREEXT_USERDEFAULTS_DATA_KEY];
                 [self.userDefaults synchronize];
-
+                
                 // Emit a URL that opens the cordova app
-                NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-
-                // Not allowed:
-                // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
-                
-                // Crashes:
-                // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
-                
-                // From https://stackoverflow.com/a/25750229/2343390
-                // Reported not to work since iOS 8.3
-                // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
-                // [self.webView loadRequest:request];
+                NSString *url = [NSString stringWithFormat:@"%@://%@", @"cxm", @"share"];
                 
                 [self openURL:[NSURL URLWithString:url]];
-
-                // Inform the host that we're done, so it un-blocks its UI.
-                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+                
+                [self dataFetched];
             }];
-
-            return;
+        } else {
+            [self dataFetched];
         }
     }
+//    [self dataFetched];
+}
 
-    // Inform the host that we're done, so it un-blocks its UI.
-    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+- (void) submit {
+    [self setup];
+    [self debug:@"[submit]"];
+    
+    if (@available(iOS 12, *)) {
+        // iOS 11 (or newer) ObjC code
+        [self handleShare];
+    } else {
+        // iOS 10 or older code
+        [self handleShareForOlderOS];
+    }
 }
 
 - (NSArray*) configurationItems {

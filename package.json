@@ -1,9 +1,9 @@
 {
-  "name": "cc.fovea.cordova.openwith",
+  "name": "cordova-plugin-openwith-cxm",
   "version": "1.2.0",
   "description": "Cordova \"Open With\" plugin for iOS and Android",
   "cordova": {
-    "id": "cc.fovea.cordova.openwith",
+    "id": "cordova-plugin-openwith-cxm",
     "platforms": [
       "android",
       "ios"
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/j3k0/cordova-plugin-openwith.git"
+    "url": "https://github.com/optimusprime13/cordova-plugin-openwith.git"
   },
   "keywords": [
     "ecosystem:cordova",
