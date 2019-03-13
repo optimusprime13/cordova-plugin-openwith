@@ -227,39 +227,21 @@ static NSDictionary* launchOptions = nil;
         return;
     }
     NSDictionary *dict = (NSDictionary*)object;
-//    NSData *data = dict[@"data"];
-    NSString *name = dict[@"name"];
+    
     self.backURL = dict[@"backURL"];
-    NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
-//    if (![data isKindOfClass:NSData.class]) {
-//        [self debug:@"[checkForFileToShare] Data content is invalid"];
-//        return;
-//    }
-    NSArray *utis = dict[@"utis"];
-    if (utis == nil) {
-        utis = @[];
-    }
-
+    
     // TODO: add the backURL to the shared intent, put it aside in the plugin
     // TODO: implement cordova.openwith.exit(intent), will check if backURL is set
 
     // Send to javascript
-//    [self debug:[NSString stringWithFormat:
-//        @"[checkForFileToShare] Sharing a %lu bytes image", (unsigned long)data.length]];
-
-    NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@",
-        name, type];
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
         @"action": @"SEND",
         @"exit": @YES,
         @"items": @[@{
-//            @"base64": [data convertToBase64],
-            @"type": type,
-            @"utis": utis,
-            @"uri": uri,
-            @"name": name
+            @"items": dict[@"items"]
         }]
     }];
+
     pluginResult.keepCallback = [NSNumber numberWithBool:YES];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:self.handlerCallback];
 }
