@@ -152,9 +152,9 @@ function projectPlistJson(context, projectName) {
 function getPreferences(context, configXml, projectName) {
   var plist = projectPlistJson(context, projectName);
   var group = "group." + plist.CFBundleIdentifier + BUNDLE_SUFFIX;
-  if (getCordovaParameter(configXml, 'GROUP_IDENTIFIER') !== "") {
-    group = getCordovaParameter(configXml, 'IOS_GROUP_IDENTIFIER');
-  }
+  // if (getCordovaParameter(configXml, 'IOS_GROUP_IDENTIFIER') !== "") {
+  //   group = getCordovaParameter(configXml, 'IOS_GROUP_IDENTIFIER');
+  // }
   return [{
     key: '__DISPLAY_NAME__',
     value: projectName
