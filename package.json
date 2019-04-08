@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-openwith-cxm",
-  "version": "1.2.2",
+  "version": "1.2.4",
   "description": "Cordova \"Open With\" plugin for iOS and Android",
   "cordova": {
     "id": "cordova-plugin-openwith-cxm",
@@ -72,6 +72,7 @@
     "src/ios/ShareExtension/ShareViewController.m",
     "www/openwith.js",
     "www/test-openwith.js",
+    "hooks/iosAddAppGroup.js",
     "hooks/iosAddTarget.js",
     "hooks/iosRemoveTarget.js",
     "hooks/iosCopyShareExtension.js",
