@@ -227,9 +227,9 @@ static NSDictionary* launchOptions = nil;
         return;
     }
     NSDictionary *dict = (NSDictionary*)object;
-    
+
     self.backURL = dict[@"backURL"];
-    
+
     // TODO: add the backURL to the shared intent, put it aside in the plugin
     // TODO: implement cordova.openwith.exit(intent), will check if backURL is set
 
@@ -237,9 +237,7 @@ static NSDictionary* launchOptions = nil;
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
         @"action": @"SEND",
         @"exit": @YES,
-        @"items": @[@{
-            @"items": dict[@"items"]
-        }]
+        @"items": dict[@"items"],
     }];
 
     pluginResult.keepCallback = [NSNumber numberWithBool:YES];
