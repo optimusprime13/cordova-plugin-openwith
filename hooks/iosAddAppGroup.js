@@ -79,9 +79,34 @@ function projectPlistJson(context, projectName) {
   return plist.parse(fs.readFileSync(path, 'utf8'));
 }
 
-function getAppGroup(context, projectName) {
+function getPreferenceValue(configXml, name) {
+  var value = configXml.match(new RegExp('name="' + name + '" value="(.*?)"', "i"));
+  if (value && value[1]) {
+    return value[1];
+  } else {
+    return null;
+  }
+}
+
+function getCordovaParameter(configXml, variableName) {
+  var variable;
+  var arg = process.argv.filter(function(arg) {
+    return arg.indexOf(variableName + '=') == 0;
+  });
+  if (arg.length >= 1) {
+    variable = arg[0].split('=')[1];
+  } else {
+    variable = getPreferenceValue(configXml, variableName);
+  }
+  return variable;
+}
+
+function getAppGroup(context, configXml, projectName) {
   var plist = projectPlistJson(context, projectName);
   var group = "group." + plist.CFBundleIdentifier + BUNDLE_SUFFIX;
+  if (getCordovaParameter(configXml, 'IOS_GROUP_IDENTIFIER') !== "") {
+    group = getCordovaParameter(configXml, 'IOS_GROUP_IDENTIFIER');
+  }
   return group;
 }
 
@@ -92,7 +117,12 @@ module.exports = function (context) {
 
   findXCodeproject(context, function(projectFolder, projectName) {
 
-    var appGroupName = getAppGroup(context, projectName);
+    var configXml = fs.readFileSync(path.join(context.opts.projectRoot, 'config.xml'), 'utf-8');
+    if (configXml) {
+      configXml = configXml.substring(configXml.indexOf('<'));
+    }
+
+    var appGroupName = getAppGroup(context, configXml, projectName);
     var entitlementsKey = 'com.apple.security.application-groups';
 
     // Entitlements-Debug.plist
