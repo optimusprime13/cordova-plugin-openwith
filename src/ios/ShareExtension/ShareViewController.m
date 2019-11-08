@@ -74,10 +74,10 @@
 
 - (void) viewDidLoad {
     [super viewDidLoad];
-    
+
     printf("did load");
     [self debug:@"[viewDidLoad]"];
-    
+
     [self submit];
 }
 
@@ -104,56 +104,80 @@
             NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSignature];
 
             // Arguments
-            NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
+            // NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
             void (^completion)(BOOL success) = ^void(BOOL success) {
                 NSLog(@"Completions block: %i", success);
             };
 
-            [invocation setTarget: responder];
-            [invocation setSelector: selector];
-            [invocation setArgument: &url atIndex: 2];
-            [invocation setArgument: &options atIndex:3];
-            [invocation setArgument: &completion atIndex: 4];
-            [invocation invoke];
-            break;
+            // [invocation setTarget: responder];
+            // [invocation setSelector: selector];
+            // [invocation setArgument: &url atIndex: 2];
+            // [invocation setArgument: &options atIndex:3];
+            // [invocation setArgument: &completion atIndex: 4];
+            // [invocation invoke];
+            // break;
+
+            if (@available(iOS 13.0, *)) {
+                UISceneOpenExternalURLOptions * options = [[UISceneOpenExternalURLOptions alloc] init];
+                options.universalLinksOnly = false;
+
+                [invocation setTarget: responder];
+                [invocation setSelector: selector];
+                [invocation setArgument: &url atIndex: 2];
+                [invocation setArgument: &options atIndex:3];
+                [invocation setArgument: &completion atIndex: 4];
+                [invocation invoke];
+                break;
+            } else {
+                NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
+
+                [invocation setTarget: responder];
+                [invocation setSelector: selector];
+                [invocation setArgument: &url atIndex: 2];
+                [invocation setArgument: &options atIndex:3];
+                [invocation setArgument: &completion atIndex: 4];
+                [invocation invoke];
+                break;
+            }
+
         }
     }
 }
 
 - (void) dataFetched {
     self.bitsToLoad--;
-    
+
     if (self.bitsToLoad == 0) {
         [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
-        
+
         NSDictionary *dict = @{
                                @"backURL": self.backURL,
                                @"items": self.attachmentArray
                                };
-        
+
         [self.userDefaults setObject:dict forKey:SHAREEXT_USERDEFAULTS_DATA_KEY];
         [self.userDefaults synchronize];
-        
+
         // Emit a URL that opens the cordova app
         NSString *url = [NSString stringWithFormat:@"%@://%@", @"cxm", @"share"];
-        
+
         [self openURL:[NSURL URLWithString:url]];
     }
 }
 
 - (NSString *) saveImageToAppGroupFolder: (UIImage *) image imageIndex: (int) imageIndex {
     assert( NULL != image );
-    
+
     NSData * jpegData = UIImageJPEGRepresentation(image, 1.0);
-    
+
     NSURL * containerURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER];
     NSString * documentsPath = containerURL.path;
-    
+
     NSString * fileName = [NSString stringWithFormat: @"image%d.jpg", imageIndex];
-    
+
     NSString * filePath = [documentsPath stringByAppendingPathComponent: fileName];
     [jpegData writeToFile: filePath atomically: YES];
-    
+
     return filePath;
 }
 
@@ -162,7 +186,7 @@
     if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
         suggestedName = [itemProvider valueForKey:@"suggestedName"];
     }
-    
+
     NSString *uti = @"";
     NSArray<NSString *> *utis = [NSArray new];
     if ([itemProvider.registeredTypeIdentifiers count] > 0) {
@@ -171,7 +195,7 @@
     } else {
         uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
     }
-    
+
     NSDictionary *dict = @{
                            @"path": path,
                            @"uti": uti,
@@ -179,21 +203,21 @@
                            @"name": suggestedName
                            };
     [self.attachmentArray addObject:dict];
-    
+
     [self dataFetched];
 }
 
 - (void) handleShare {
     int idx = 0;
-    
+
     for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
         self.bitsToLoad ++;
         idx++;
-        
+
         if([itemProvider hasItemConformingToTypeIdentifier:@"public.image"]) {
-            
+
             [itemProvider loadItemForTypeIdentifier:@"public.image" options:nil completionHandler:^(UIImage *item, NSError *error) {
-                
+
                 NSString *path = [self saveImageToAppGroupFolder:item imageIndex:idx];
                 [self addItemToArray:path withProvider:itemProvider];
             }];
@@ -205,13 +229,13 @@
 }
 
 - (void) handleShareForOlderOS {
-    
+
     for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
         self.bitsToLoad++;
-        
+
         if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
             [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-            
+
             [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil
                                   completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
                                       [self addItemToArray:[(NSURL*)item absoluteString] withProvider:itemProvider];
@@ -226,7 +250,7 @@
 - (void) submit {
     [self setup];
     [self debug:@"[submit]"];
-    
+
     if (@available(iOS 12, *)) {
         // iOS 12 (or newer) ObjC code
         [self handleShare];
