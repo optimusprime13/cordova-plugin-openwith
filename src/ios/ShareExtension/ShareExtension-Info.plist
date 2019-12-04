@@ -29,7 +29,11 @@
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
-				<integer>5</integer>
+				<integer>3</integer>
+				<key>NSExtensionActivationSupportsText</key>
+				<true/>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>3</integer>
 			</dict>
 			<key>NSExtensionActivationUsesStrictMatching</key>
 			<integer>1</integer>

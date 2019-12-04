@@ -40,6 +40,7 @@
 @property (nonatomic) int verbosityLevel;
 @property (nonatomic,retain) NSUserDefaults *userDefaults;
 @property (nonatomic,retain) NSString *backURL;
+@property (nonatomic,retain) NSString *hostBundleID;
 @property (nonatomic) int bitsToLoad;
 @property (nonatomic,retain) NSMutableArray *attachmentArray;
 
@@ -98,25 +99,15 @@
 
     UIResponder* responder = self;
     while ((responder = [responder nextResponder]) != nil) {
-        NSLog(@"responder = %@", responder);
+        NSLog(@"test test responder = %@", responder);
         if([responder respondsToSelector:selector] == true) {
             NSMethodSignature *methodSignature = [responder methodSignatureForSelector:selector];
             NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSignature];
 
             // Arguments
-            // NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
             void (^completion)(BOOL success) = ^void(BOOL success) {
                 NSLog(@"Completions block: %i", success);
             };
-
-            // [invocation setTarget: responder];
-            // [invocation setSelector: selector];
-            // [invocation setArgument: &url atIndex: 2];
-            // [invocation setArgument: &options atIndex:3];
-            // [invocation setArgument: &completion atIndex: 4];
-            // [invocation invoke];
-            // break;
-
             if (@available(iOS 13.0, *)) {
                 UISceneOpenExternalURLOptions * options = [[UISceneOpenExternalURLOptions alloc] init];
                 options.universalLinksOnly = false;
@@ -146,47 +137,67 @@
 
 - (void) dataFetched {
     self.bitsToLoad--;
-
     if (self.bitsToLoad == 0) {
-        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
-
+        [self.extensionContext completeRequestReturningItems:self.extensionContext.inputItems completionHandler:nil];
         NSDictionary *dict = @{
                                @"backURL": self.backURL,
                                @"items": self.attachmentArray
                                };
-
         [self.userDefaults setObject:dict forKey:SHAREEXT_USERDEFAULTS_DATA_KEY];
         [self.userDefaults synchronize];
-
         // Emit a URL that opens the cordova app
         NSString *url = [NSString stringWithFormat:@"%@://%@", @"cxm", @"share"];
-
+        // I don't know why but here we need to wait for some time. If the user choose the share icon from the expanded list, it looks like we
+        // should leave some time for the list to be closed.
+        [NSThread sleepForTimeInterval:0.5];
         [self openURL:[NSURL URLWithString:url]];
     }
 }
 
 - (NSString *) saveImageToAppGroupFolder: (UIImage *) image imageIndex: (int) imageIndex {
     assert( NULL != image );
-
     NSData * jpegData = UIImageJPEGRepresentation(image, 1.0);
-
     NSURL * containerURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER];
     NSString * documentsPath = containerURL.path;
-
     NSString * fileName = [NSString stringWithFormat: @"image%d.jpg", imageIndex];
-
     NSString * filePath = [documentsPath stringByAppendingPathComponent: fileName];
     [jpegData writeToFile: filePath atomically: YES];
-
     return filePath;
 }
 
-- (void) addItemToArray: (NSString *)path withProvider:(NSItemProvider*)itemProvider {
-    NSString *suggestedName = @"";
-    if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
-        suggestedName = [itemProvider valueForKey:@"suggestedName"];
+- (NSString *) storeTextToAppGroupFolder: (NSString *) text fileIndex: (int) index {
+    assert( NULL != text );
+    NSURL * containerURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER];
+    NSString * documentsPath = containerURL.path;
+    NSString * fileName = [NSString stringWithFormat: @"note%d.txt", index];
+    NSString * targetPath = [documentsPath stringByAppendingPathComponent: fileName];
+    @try {
+        [text writeToFile:targetPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     }
+    @catch (NSException *error) {
+        return NULL;
+    }
+    return targetPath;
+}
 
+- (NSString *) copyFileToAppGroupFolder: (NSURL *) sourceUrl fileIndex: (int) index {
+    assert( NULL != sourceUrl );
+    NSURL * containerURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER];
+    NSString * documentsPath = containerURL.path;
+    NSString * fileName = [sourceUrl.absoluteString lastPathComponent].stringByRemovingPercentEncoding;
+    NSString * targetPath = [documentsPath stringByAppendingPathComponent: fileName];
+    @try {
+        NSData *data = [NSData dataWithContentsOfURL:sourceUrl];
+        [data writeToFile:targetPath atomically:YES];
+    }
+    @catch (NSException *error) {
+        return NULL;
+    }
+    return targetPath;
+}
+
+
+- (void) addItemToArray: (NSString *)path withProvider:(NSItemProvider*)itemProvider {
     NSString *uti = @"";
     NSArray<NSString *> *utis = [NSArray new];
     if ([itemProvider.registeredTypeIdentifiers count] > 0) {
@@ -195,15 +206,17 @@
     } else {
         uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
     }
-
+    NSString *from = @"unknown";
+    if ([self.hostBundleID isEqualToString:@"com.apple.mobileslideshow"]) from = @"photos";
+    if ([self.hostBundleID isEqualToString:@"com.apple.mobilenotes"]) from = @"notes";
+    if ([self.hostBundleID isEqualToString:@"com.apple.DocumentsApp"]) from = @"files";
     NSDictionary *dict = @{
                            @"path": path,
                            @"uti": uti,
                            @"utis": utis,
-                           @"name": suggestedName
+                           @"from": from
                            };
     [self.attachmentArray addObject:dict];
-
     [self dataFetched];
 }
 
@@ -221,8 +234,21 @@
                 NSString *path = [self saveImageToAppGroupFolder:item imageIndex:idx];
                 [self addItemToArray:path withProvider:itemProvider];
             }];
-        } else {
-            [self debug:[NSString stringWithFormat:@"Attachment not of type Image. Is: %@", itemProvider]];
+        }
+        else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.text"]) {
+            [itemProvider loadItemForTypeIdentifier:@"public.text" options:nil completionHandler:^(NSString *item, NSError *error) {
+                NSString* targetPath = [self storeTextToAppGroupFolder:item fileIndex:idx];
+                [self addItemToArray:targetPath withProvider:itemProvider];
+            }];
+        }
+        else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.data"]) {
+            [itemProvider loadItemForTypeIdentifier:@"public.data" options:nil completionHandler:^(NSURL *item, NSError *error) {
+                NSString* targetPath = [self copyFileToAppGroupFolder:item fileIndex:idx];
+                [self addItemToArray:targetPath withProvider:itemProvider];
+            }];
+        }
+        else {
+            [self debug:[NSString stringWithFormat:@"Attachment not of type file. Is: %@", itemProvider]];
             [self dataFetched];
         }
     }
@@ -238,13 +264,12 @@
 
             [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil
                                   completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
-                                      [self addItemToArray:[(NSURL*)item absoluteString] withProvider:itemProvider];
+                [self addItemToArray:[(NSURL*)item absoluteString] withProvider:itemProvider];
                                   }];
         } else {
             [self dataFetched];
         }
     }
-    //    [self dataFetched];
 }
 
 - (void) submit {
@@ -267,6 +292,7 @@
 
 - (NSString*) backURLFromBundleID: (NSString*)bundleId {
     if (bundleId == nil) return nil;
+    if ([bundleId isEqualToString:@"com.apple.DocumentsApp"]) return @"shareddocuments://";
     // App Store - com.apple.AppStore
     if ([bundleId isEqualToString:@"com.apple.AppStore"]) return @"itms-apps://";
     // Calculator - com.apple.calculator
@@ -316,6 +342,7 @@
 // We use it to store the _hostBundleID
 - (void) willMoveToParentViewController: (UIViewController*)parent {
     NSString *hostBundleID = [parent valueForKey:(@"_hostBundleID")];
+    self.hostBundleID = hostBundleID;
     self.backURL = [self backURLFromBundleID:hostBundleID];
 }
 
