@@ -154,8 +154,10 @@
     }
 }
 
-- (NSString *) saveImageToAppGroupFolder: (UIImage *) image imageIndex: (int) imageIndex {
-    assert( NULL != image );
+- (NSString *) saveImageToAppGroupFolder: (NSURL *) sourceUrl imageIndex: (int) imageIndex {
+    assert( NULL != sourceUrl );
+    NSData * data = [NSData dataWithContentsOfURL:sourceUrl];
+    UIImage * image = [UIImage imageWithData:data];
     NSData * jpegData = UIImageJPEGRepresentation(image, 1.0);
     NSURL * containerURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER];
     NSString * documentsPath = containerURL.path;
@@ -226,13 +228,10 @@
     for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
         self.bitsToLoad ++;
         idx++;
-
         if([itemProvider hasItemConformingToTypeIdentifier:@"public.image"]) {
-
-            [itemProvider loadItemForTypeIdentifier:@"public.image" options:nil completionHandler:^(UIImage *item, NSError *error) {
-
-                NSString *path = [self saveImageToAppGroupFolder:item imageIndex:idx];
-                [self addItemToArray:path withProvider:itemProvider];
+            [itemProvider loadItemForTypeIdentifier:@"public.image" options:nil completionHandler:^(NSURL *item, NSError *error) {
+                NSString* targetPath = [self saveImageToAppGroupFolder:item imageIndex:idx];
+                [self addItemToArray:targetPath withProvider:itemProvider];
             }];
         }
         else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.text"]) {
