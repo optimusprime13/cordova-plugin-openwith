@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.util.Base64;
 
 import java.io.BufferedReader;
@@ -184,23 +185,14 @@ class Serializer {
         final JSONObject json = new JSONObject();
         final String type = contentResolver.getType(uri);
         json.put("type", type);
+        if (type.startsWith("image")) {
+            json.put("from", "photos");
+        }
         json.put("uri", uri.toString());
         final String path = getRealPathFromURI(contentResolver, uri);
         json.put("path", path);
-        final String fileName = path.substring(path.lastIndexOf("/") + 1);
+        final String fileName = getFileName(contentResolver, uri);
         json.put("name", fileName);
-        final String[] imageExtensions = new String[] {
-                "jpg",
-                "png",
-                "gif",
-                "jpeg"
-        };
-        for (String extension: imageExtensions) {
-            if (path.toLowerCase().endsWith(extension)) {
-                json.put("from", "photos");
-                break;
-            }
-        }
         return json;
     }
 
@@ -237,6 +229,31 @@ class Serializer {
         cursor.moveToFirst();
         final String result = cursor.getString(column_index);
         cursor.close();
+        return result;
+    }
+
+    public static String getFileName(
+            ContentResolver contentResolver,
+            Uri uri
+    ) {
+        String result = null;
+        if (uri.getScheme().equals("content")) {
+            Cursor cursor = contentResolver.query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
+            try {
+                if (cursor != null && cursor.moveToFirst()) {
+                    result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            int cut = result.lastIndexOf('/');
+            if (cut != -1) {
+                result = result.substring(cut + 1);
+            }
+        }
         return result;
     }
 }
