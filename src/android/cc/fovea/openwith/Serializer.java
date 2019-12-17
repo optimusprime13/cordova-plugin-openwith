@@ -2,6 +2,7 @@ package cc.fovea.openwith;
 
 import android.content.ClipData;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -9,8 +10,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Base64;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -27,12 +36,13 @@ class Serializer {
      * If none are specified, null is return.
      */
     public static JSONObject toJSONObject(
+            final Context context,
             final ContentResolver contentResolver,
             final Intent intent)
             throws JSONException {
         JSONArray items = null;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            items = itemsFromClipData(contentResolver, intent.getClipData());
+            items = itemsFromClipData(context, contentResolver, intent.getClipData());
         }
         if (items == null || items.length() == 0) {
             items = itemsFromExtras(contentResolver, intent.getExtras());
@@ -43,6 +53,9 @@ class Serializer {
         if (items == null) {
             return null;
         }
+        final JSONObject enclosingItem = new JSONObject();
+        enclosingItem.put("items", items);
+        items = new JSONArray(new JSONObject[] {enclosingItem} );
         final JSONObject action = new JSONObject();
         action.put("action", translateAction(intent.getAction()));
         action.put("exit", readExitOnSent(intent.getExtras()));
@@ -52,7 +65,7 @@ class Serializer {
 
     public static String translateAction(final String action) {
         if ("android.intent.action.SEND".equals(action) ||
-            "android.intent.action.SEND_MULTIPLE".equals(action)) {
+                "android.intent.action.SEND_MULTIPLE".equals(action)) {
             return "SEND";
         } else if ("android.intent.action.VIEW".equals(action)) {
             return "VIEW";
@@ -74,14 +87,37 @@ class Serializer {
      *
      * Defaults to null. */
     public static JSONArray itemsFromClipData(
+            final Context context,
             final ContentResolver contentResolver,
             final ClipData clipData)
             throws JSONException {
         if (clipData != null) {
             final int clipItemCount = clipData.getItemCount();
             JSONObject[] items = new JSONObject[clipItemCount];
-            for (int i = 0; i < clipItemCount; i++) {
-                items[i] = toJSONObject(contentResolver, clipData.getItemAt(i).getUri());
+            if (clipData.getDescription().getMimeType(0).equals("text/plain")) {
+                for (int i = 0; i < clipItemCount; i++) {
+                    items[i] = new JSONObject();
+                    items[i].put("type", "text/plain");
+                    final String text = clipData.getItemAt(i).getText().toString();
+                    final String fileName = "note" + i + ".txt";
+                    File file = new File(context.getExternalCacheDir(), fileName);
+                    try {
+                        FileWriter fileWriter = new FileWriter(file);
+                        fileWriter.write(text);
+                        fileWriter.flush();
+                        fileWriter.close();
+                        final Uri uri = Uri.fromFile(file);
+                        items[i].put("path", file.getAbsolutePath());
+                        items[i].put("uri", uri.toString());
+                        items[i].put("from", "notes");
+                    } catch(Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            } else {
+                for (int i = 0; i < clipItemCount; i++) {
+                    items[i] = toJSONObject(contentResolver, clipData.getItemAt(i).getUri());
+                }
             }
             return new JSONArray(items);
         }
@@ -148,8 +184,23 @@ class Serializer {
         final JSONObject json = new JSONObject();
         final String type = contentResolver.getType(uri);
         json.put("type", type);
-        json.put("uri", uri);
-        json.put("path", getRealPathFromURI(contentResolver, uri));
+        json.put("uri", uri.toString());
+        final String path = getRealPathFromURI(contentResolver, uri);
+        json.put("path", path);
+        final String fileName = path.substring(path.lastIndexOf("/") + 1);
+        json.put("name", fileName);
+        final String[] imageExtensions = new String[] {
+                "jpg",
+                "png",
+                "gif",
+                "jpeg"
+        };
+        for (String extension: imageExtensions) {
+            if (path.toLowerCase().endsWith(extension)) {
+                json.put("from", "photos");
+                break;
+            }
+        }
         return json;
     }
 
@@ -167,26 +218,26 @@ class Serializer {
         }
     }
 
-	/** Convert the Uri to the direct file system path of the image file.
+    /** Convert the Uri to the direct file system path of the image file.
      *
      * source: https://stackoverflow.com/questions/20067508/get-real-path-from-uri-android-kitkat-new-storage-access-framework/20402190?noredirect=1#comment30507493_20402190 */
-	public static String getRealPathFromURI(
+    public static String getRealPathFromURI(
             final ContentResolver contentResolver,
             final Uri uri) {
-		final String[] proj = { MediaStore.Images.Media.DATA };
-		final Cursor cursor = contentResolver.query(uri, proj, null, null, null);
-		if (cursor == null) {
-			return "";
-		}
-		final int column_index = cursor.getColumnIndex(MediaStore.Images.Media.DATA);
-		if (column_index < 0) {
-			cursor.close();
-			return "";
-		}
-		cursor.moveToFirst();
-		final String result = cursor.getString(column_index);
-		cursor.close();
-		return result;
-	}
+        final String[] proj = { MediaStore.Images.Media.DATA };
+        final Cursor cursor = contentResolver.query(uri, proj, null, null, null);
+        if (cursor == null) {
+            return "";
+        }
+        final int column_index = cursor.getColumnIndex(MediaStore.Images.Media.DATA);
+        if (column_index < 0) {
+            cursor.close();
+            return "";
+        }
+        cursor.moveToFirst();
+        final String result = cursor.getString(column_index);
+        cursor.close();
+        return result;
+    }
 }
 // vim: ts=4:sw=4:et

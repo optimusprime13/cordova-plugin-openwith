@@ -244,7 +244,7 @@ public class OpenWithPlugin extends CordovaPlugin {
         try {
             final ContentResolver contentResolver = this.cordova
                 .getActivity().getApplicationContext().getContentResolver();
-            return Serializer.toJSONObject(contentResolver, intent);
+            return Serializer.toJSONObject(this.cordova.getActivity().getApplicationContext(), contentResolver, intent);
         } catch (JSONException e) {
             log(ERROR, "Error converting intent to JSON: " + e.getMessage());
             log(ERROR, Arrays.toString(e.getStackTrace()));
