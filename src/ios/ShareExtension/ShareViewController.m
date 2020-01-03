@@ -210,7 +210,9 @@
     }
     NSString *from = @"unknown";
     if ([self.hostBundleID isEqualToString:@"com.apple.mobileslideshow"]) from = @"photos";
-    if ([self.hostBundleID isEqualToString:@"com.apple.mobilenotes"]) from = @"notes";
+    if ([self.hostBundleID isEqualToString:@"com.apple.mobilenotes"] ||
+        [self.hostBundleID isEqualToString:@"com.google.Keep"]
+    ) from = @"notes";
     if ([self.hostBundleID isEqualToString:@"com.apple.DocumentsApp"]) from = @"files";
     NSDictionary *dict = @{
                            @"path": path,
