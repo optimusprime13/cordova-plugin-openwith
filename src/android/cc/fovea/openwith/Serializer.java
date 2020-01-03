@@ -190,8 +190,13 @@ class Serializer {
         }
         json.put("uri", uri.toString());
         final String path = getRealPathFromURI(contentResolver, uri);
-        json.put("path", path);
-        final String fileName = getFileName(contentResolver, uri);
+        json.put("path", path);json.put("path", path);
+        String fileName;
+        if (path == null || path.equals("")) {
+            fileName = getFileName(contentResolver, uri);
+        } else {
+            fileName = path.substring(path.lastIndexOf("/") + 1);
+        }
         json.put("name", fileName);
         return json;
     }
