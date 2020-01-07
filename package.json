@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-openwith-cxm",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "Cordova \"Open With\" plugin for iOS and Android",
   "cordova": {
     "id": "cordova-plugin-openwith-cxm",
