@@ -28,6 +28,8 @@
 		<dict>
 			<key>NSExtensionActivationRule</key>
 			<dict>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>3</integer>
 				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
 				<integer>3</integer>
 				<key>NSExtensionActivationSupportsText</key>

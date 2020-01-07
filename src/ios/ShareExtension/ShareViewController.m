@@ -29,6 +29,7 @@
 
 #import <UIKit/UIKit.h>
 #import <Social/Social.h>
+#import <AVFoundation/AVFoundation.h>
 #import "ShareViewController.h"
 
 @interface ShareViewController : UIViewController {
@@ -94,44 +95,10 @@
 }
 
 - (void) openURL:(nonnull NSURL *)url {
-
-    SEL selector = NSSelectorFromString(@"openURL:options:completionHandler:");
-
-    UIResponder* responder = self;
-    while ((responder = [responder nextResponder]) != nil) {
-        NSLog(@"test test responder = %@", responder);
-        if([responder respondsToSelector:selector] == true) {
-            NSMethodSignature *methodSignature = [responder methodSignatureForSelector:selector];
-            NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:methodSignature];
-
-            // Arguments
-            void (^completion)(BOOL success) = ^void(BOOL success) {
-                NSLog(@"Completions block: %i", success);
-            };
-            if (@available(iOS 13.0, *)) {
-                UISceneOpenExternalURLOptions * options = [[UISceneOpenExternalURLOptions alloc] init];
-                options.universalLinksOnly = false;
-
-                [invocation setTarget: responder];
-                [invocation setSelector: selector];
-                [invocation setArgument: &url atIndex: 2];
-                [invocation setArgument: &options atIndex:3];
-                [invocation setArgument: &completion atIndex: 4];
-                [invocation invoke];
-                break;
-            } else {
-                NSDictionary<NSString *, id> *options = [NSDictionary dictionary];
-
-                [invocation setTarget: responder];
-                [invocation setSelector: selector];
-                [invocation setArgument: &url atIndex: 2];
-                [invocation setArgument: &options atIndex:3];
-                [invocation setArgument: &completion atIndex: 4];
-                [invocation invoke];
-                break;
-            }
-
-        }
+    NSString *className = @"UIApplication";
+    if (NSClassFromString(className)) {
+        id object = [NSClassFromString(className) performSelector: @selector(sharedApplication)];
+        [object performSelector: @selector(openURL:) withObject: url];
     }
 }
 
@@ -165,6 +132,46 @@
     NSString * filePath = [documentsPath stringByAppendingPathComponent: fileName];
     [jpegData writeToFile: filePath atomically: YES];
     return filePath;
+}
+
+// We need to do video format transformation here
+- (void *) saveMovieToAppGroupFolder: (NSURL *) sourceUrl :(int) movieIndex :(NSItemProvider *) itemProvider {
+    assert( NULL != sourceUrl );
+    NSURL * containerURL = [[NSFileManager defaultManager] containerURLForSecurityApplicationGroupIdentifier: SHAREEXT_GROUP_IDENTIFIER];
+    NSString *documentsPath = containerURL.path;
+    // AVAssetExportSession cannot export directly under app group folder. We must specify the location as /Library/Caches
+    NSString *libraryPath = [documentsPath stringByAppendingPathComponent: @"Library"];
+    NSString *cachePath = [libraryPath stringByAppendingPathComponent: @"Caches"];
+    NSString * fileName = [NSString stringWithFormat: @"video%d.mp4", movieIndex];
+    NSString * filePath = [cachePath stringByAppendingPathComponent: fileName];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+        [[NSFileManager defaultManager] removeItemAtPath:filePath error: nil];
+    }
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:sourceUrl options:nil];
+    NSArray *compatiblePresets = [AVAssetExportSession exportPresetsCompatibleWithAsset:asset];
+    if ([compatiblePresets containsObject:AVAssetExportPresetMediumQuality]) {
+        AVAssetExportSession *exportSession = [AVAssetExportSession exportSessionWithAsset:asset presetName:AVAssetExportPresetPassthrough];
+        exportSession.outputURL = [NSURL fileURLWithPath:filePath];
+        exportSession.outputFileType = AVFileTypeMPEG4;
+        [exportSession exportAsynchronouslyWithCompletionHandler:^{
+            switch ([exportSession status]) {
+                case AVAssetExportSessionStatusCompleted:
+                    NSLog(@"Completed exporting!");
+                    break;
+                case AVAssetExportSessionStatusFailed:
+                    NSLog(@"Export failed: %@", [[exportSession error] localizedDescription]);
+                    break;
+                case AVAssetExportSessionStatusCancelled:
+                    NSLog(@"Export canceled");
+                    break;
+                default:
+                    break;
+            }
+            [self addItemToArray:filePath withProvider:itemProvider];
+        }];
+    } else {
+        [self dataFetched];
+    }
 }
 
 - (NSString *) storeTextToAppGroupFolder: (NSString *) text fileIndex: (int) index {
@@ -240,6 +247,11 @@
             [itemProvider loadItemForTypeIdentifier:@"public.text" options:nil completionHandler:^(NSString *item, NSError *error) {
                 NSString* targetPath = [self storeTextToAppGroupFolder:item fileIndex:idx];
                 [self addItemToArray:targetPath withProvider:itemProvider];
+            }];
+        }
+        else if([itemProvider hasItemConformingToTypeIdentifier:@"public.movie"]) {
+            [itemProvider loadItemForTypeIdentifier:@"public.movie" options:nil completionHandler:^(NSURL *item, NSError *error) {
+                [self saveMovieToAppGroupFolder:item :idx :itemProvider];
             }];
         }
         else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.data"]) {
