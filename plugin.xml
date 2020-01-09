@@ -94,17 +94,16 @@ SOFTWARE.
 
         <config-file target="AndroidManifest.xml" parent="/manifest/application/activity">
             <intent-filter>
-                <!-- category android:name="android.intent.category.BROWSABLE" / -->
-                <!-- See https://developer.android.com/guide/topics/manifest/data-element.html -->
                 <data android:mimeType="image/*" />
-                <data android:mimeType="application/*" />
                 <action android:name="android.intent.action.SEND" />
-                <!-- action android:name="android.intent.action.VIEW" / -->
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <intent-filter>
                 <data android:mimeType="text/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/*" />
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
