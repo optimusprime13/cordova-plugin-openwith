@@ -184,10 +184,14 @@ class Serializer {
         }
         final JSONObject json = new JSONObject();
         final String type = contentResolver.getType(uri);
-        json.put("type", type);
-        if (type.startsWith("image")) {
-            json.put("from", "photos");
+        
+        if (type != null) {
+            json.put("type", type);
+            if (type.startsWith("image")) {
+                json.put("from", "photos");
+            }
         }
+
         json.put("uri", uri.toString());
         final String path = getRealPathFromURI(contentResolver, uri);
         json.put("path", path);json.put("path", path);
